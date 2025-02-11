@@ -186,6 +186,7 @@ class StaticInst : public RefCounted, public StaticInstFlags
     bool isSyscall() const { return flags[IsSyscall]; }
     bool isMacroop() const { return flags[IsMacroop]; }
     bool isMicroop() const { return flags[IsMicroop]; }
+    bool isMagic() const { return flags[IsMagic]; }
     bool isDelayedCommit() const { return flags[IsDelayedCommit]; }
     bool isLastMicroop() const { return flags[IsLastMicroop]; }
     bool isFirstMicroop() const { return flags[IsFirstMicroop]; }

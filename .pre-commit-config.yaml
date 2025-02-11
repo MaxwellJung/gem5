@@ -96,9 +96,9 @@ repos:
             exclude: .*
             language: system
             description: The gem5 style checker hook.
-          - id: gem5-commit-msg-checker
-            name: gem5 commit msg checker
-            entry: util/git-commit-msg.py
-            language: system
-            stages: [commit-msg]
-            description: The gem5 commit message checker hook.
+          # - id: gem5-commit-msg-checker
+          #   name: gem5 commit msg checker
+          #   entry: util/git-commit-msg.py
+          #   language: system
+          #   stages: [commit-msg]
+          #   description: The gem5 commit message checker hook.

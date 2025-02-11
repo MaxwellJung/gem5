@@ -44,7 +44,9 @@ format WarnUnimpl {
             0x2: fcom();
             0x3: fcomp();
             0x4: Inst::FSUB1(Ed);
-            0x5: fsubr();
+            0x5: BasicOperate::magicInst({{
+                printf("magicInst print test\r\n");
+            }}, IsMagic);
             0x6: Inst::FDIV1(Ed);
             0x7: fdivr();
         }

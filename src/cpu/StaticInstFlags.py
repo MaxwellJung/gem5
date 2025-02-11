@@ -99,5 +99,6 @@ class StaticInstFlags(Enum):
         "IsHtmStart",  # Starts a HTM transaction
         "IsHtmStop",  # Stops (commits) a HTM transaction
         "IsHtmCancel",  # Explicitely aborts a HTM transaction
+        "IsMagic",  # magic instructions cool!
         "IsInvalid",  # An invalid instruction
     ]
