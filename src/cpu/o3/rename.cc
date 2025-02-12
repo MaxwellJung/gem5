@@ -609,6 +609,10 @@ Rename::renameInsts(ThreadID tid)
         //For store instruction, check SQ size and take into account the
         //inflight stores
 
+        if (inst->isMagic()) {
+            printf("Magic instruction is the rename stage.\n");
+        }
+
         if (inst->isLoad()) {
             if (calcFreeLQEntries(tid) <= 0) {
                 DPRINTF(Rename, "[tid:%i] Cannot rename due to no free LQ\n",

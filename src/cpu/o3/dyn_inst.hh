@@ -558,6 +558,7 @@ class DynInst : public ExecContext, public RefCounted
     bool isCondCtrl()     const { return staticInst->isCondCtrl(); }
     bool isUncondCtrl()   const { return staticInst->isUncondCtrl(); }
     bool isSerializing()  const { return staticInst->isSerializing(); }
+    bool isMagic()  const { return staticInst->isMagic(); }
     bool
     isSerializeBefore() const
     {

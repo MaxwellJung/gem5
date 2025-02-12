@@ -1121,6 +1121,10 @@ IEW::executeInsts()
 
         DynInstPtr inst = instQueue.getInstToExecute();
 
+        if (inst->isMagic()) {
+            printf("Magic instruction is in the execute stage.\n");
+        }
+
         DPRINTF(IEW, "Execute: Processing PC %s, [tid:%i] [sn:%llu].\n",
                 inst->pcState(), inst->threadNumber,inst->seqNum);
 
@@ -1351,6 +1355,10 @@ IEW::writebackInsts()
              toCommit->insts[inst_num]; inst_num++) {
         DynInstPtr inst = toCommit->insts[inst_num];
         ThreadID tid = inst->threadNumber;
+
+        if (inst->isMagic()) {
+            printf("Magic instruction is in the writeback stage.\n");
+        }
 
         DPRINTF(IEW, "Sending instructions to commit, [sn:%lli] PC %s.\n",
                 inst->seqNum, inst->pcState());

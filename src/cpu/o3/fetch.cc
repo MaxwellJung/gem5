@@ -1040,6 +1040,7 @@ Fetch::buildInst(ThreadID tid, StaticInstPtr staticInst,
     DPRINTF(Fetch, "[tid:%i] Instruction is: %s\n", tid,
             instruction->staticInst->disassemble(this_pc.instAddr()));
 
+
 #if TRACING_ON
     if (trace) {
         instruction->traceData =
@@ -1064,6 +1065,10 @@ Fetch::buildInst(ThreadID tid, StaticInstPtr staticInst,
 
     // Keep track of if we can take an interrupt at this boundary
     delayedCommit[tid] = instruction->isDelayedCommit();
+
+    if (instruction->isMagic()) {
+        printf("Magic instruction is in the fetch stage\n");
+    }
 
     return instruction;
 }

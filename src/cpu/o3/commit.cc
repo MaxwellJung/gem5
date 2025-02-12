@@ -1110,6 +1110,10 @@ Commit::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
 {
     assert(head_inst);
 
+    if (head_inst->isMagic()) {
+        printf("Magic instruction is in the commit stage\n");
+    }
+
     ThreadID tid = head_inst->threadNumber;
 
     // If the instruction is not executed yet, then it will need extra
@@ -1250,6 +1254,7 @@ Commit::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
     DPRINTF(Commit,
             "[tid:%i] [sn:%llu] Committing instruction with PC %s\n",
             tid, head_inst->seqNum, head_inst->pcState());
+
     if (head_inst->traceData) {
         head_inst->traceData->setFetchSeq(head_inst->seqNum);
         head_inst->traceData->setCPSeq(thread[tid]->numOp);
