@@ -75,18 +75,19 @@ NRU::getVictim(const ReplacementCandidates& candidates) const
     for (const auto& candidate : candidates) {
         // explicitly specify true / false to be clear
         if (std::static_pointer_cast<NRUReplData>(
-            candidate->replacementData)->nruBit == true)
-            {
-                return candidate;
+            candidate->replacementData)->nruBit) {
+                victim = candidate;
+                return victim;
             }
     }
     // Invalidate every line if we were unable to replace a line
     for (const auto& candidate : candidates) {
-        // std::static_pointer_cast<NRUReplData>(candidate->replacementData)->nruBit->invalidate();
-        std::static_pointer_cast<NRUReplData>(candidate->replacementData)->nruBit = 0;
+        std::static_pointer_cast<NRUReplData>(
+            candidate->replacementData)->nruBit = true;
     }
     // Since every line has nruBit = 1, return the first entry.
-    // return candidates[0];
+    victim = candidates[0];
+
     return victim;
 }
 std::shared_ptr<ReplacementData>

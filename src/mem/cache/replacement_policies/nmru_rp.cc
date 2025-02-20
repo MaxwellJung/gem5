@@ -75,7 +75,7 @@ NMRU::getVictim(const ReplacementCandidates& candidates) const
             victim = candidate;
             // return candidate right away because it automatically meets the criteria of
             // "any line that’s not the most recently used line"
-            return candidate;
+            return victim;
         }
     }
     return victim;
