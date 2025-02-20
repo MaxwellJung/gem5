@@ -139,6 +139,8 @@ if "--ruby" in sys.argv:
 
 args = parser.parse_args()
 
+print(args.cpu_type, args.l1d_assoc, args.l1d_repl, args.l2_repl)
+
 multiprocesses = []
 numThreads = 1
 

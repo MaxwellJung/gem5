@@ -83,7 +83,7 @@ NRU::getVictim(const ReplacementCandidates& candidates) const
     // Invalidate every line if we were unable to replace a line
     for (const auto& candidate : candidates) {
         // std::static_pointer_cast<NRUReplData>(candidate->replacementData)->nruBit->invalidate();
-        std::static_pointer_cast<NRUReplData>(candidate->replacementData)->nruBit = 0;
+        std::static_pointer_cast<NRUReplData>(candidate->replacementData)->nruBit = true;
     }
     // Since every line has nruBit = 1, return the first entry.
     // return candidates[0];

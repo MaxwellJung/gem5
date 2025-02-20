@@ -30,6 +30,7 @@
 #include <memory>
 #include "params/NMRURP.hh"
 #include "sim/cur_tick.hh"
+
 namespace gem5
 {
 namespace replacement_policy
@@ -64,20 +65,31 @@ NMRU::getVictim(const ReplacementCandidates& candidates) const
 {
     // There must be at least one replacement candidate
     assert(candidates.size() > 0);
-    // Visit all candidates to find victim
-    ReplaceableEntry* victim = candidates[0];
+
+    // Return the singular candidate to avoid an infinite loop
+    if (candidates.size() == 1) {
+        return candidates[0];
+    }
+
+    // Visit all candidates to find the MRU to avoid
+    ReplaceableEntry* mruLine = candidates[0];
+
     for (const auto& candidate : candidates) {
         // Update victim entry if necessary
         if (std::static_pointer_cast<NMRUReplData>(
-                    candidate->replacementData)->lastTouchTick <
+                    candidate->replacementData)->lastTouchTick >
                 std::static_pointer_cast<NMRUReplData>(
-                    victim->replacementData)->lastTouchTick) {
-            victim = candidate;
-            // return candidate right away because it automatically meets the criteria of
-            // "any line that’s not the most recently used line"
-            return candidate;
+                    mruLine->replacementData)->lastTouchTick) {
+            mruLine = candidate;
         }
     }
+
+    // Randomly choose victim. Repeat if random choice is the MRU line.
+    ReplaceableEntry* victim = candidates[rng->random<unsigned>(0, candidates.size() - 1)];
+    while (victim == mruLine) {
+        victim = candidates[rng->random<unsigned>(0, candidates.size() - 1)];
+    }
+
     return victim;
 }
 std::shared_ptr<ReplacementData>

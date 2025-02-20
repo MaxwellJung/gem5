@@ -155,6 +155,7 @@ def config_cache(options, system):
             # dcache = dcache_class(**_get_cache_opts("l1d", options))
             dcache = dcache_class(size=options.l1d_size, assoc=options.l1d_assoc,
                                   replacement_policy=ObjectList.repl_list.get(options.l1d_repl)())
+            print(dcache, dcache.size, dcache.assoc, ObjectList.repl_list.get(options.l1d_repl)())
 
             # If we are using ISA.X86 or ISA.RISCV, we set walker caches.
             if ObjectList.cpu_list.get_isa(options.cpu_type) in [

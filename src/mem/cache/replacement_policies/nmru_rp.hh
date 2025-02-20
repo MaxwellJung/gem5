@@ -32,7 +32,10 @@
  */
 #ifndef __MEM_CACHE_REPLACEMENT_POLICIES_NMRU_RP_HH__
 #define __MEM_CACHE_REPLACEMENT_POLICIES_NMRU_RP_HH__
+
+#include "base/random.hh"
 #include "mem/cache/replacement_policies/base.hh"
+
 namespace gem5
 {
 struct NMRURPParams;
@@ -41,6 +44,8 @@ namespace replacement_policy
 class NMRU : public Base
 {
   protected:
+    mutable gem5::Random::RandomPtr rng = gem5::Random::genRandom();
+
     /** NMRU-specific implementation of replacement data. */
     struct NMRUReplData : ReplacementData
     {
