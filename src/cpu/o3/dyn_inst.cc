@@ -59,9 +59,11 @@ DynInst::DynInst(const Arrays &arrays, const StaticInstPtr &static_inst,
       _numSrcs(arrays.numSrcs), _numDests(arrays.numDests),
       _flatDestIdx(arrays.flatDestIdx), _destIdx(arrays.destIdx),
       _prevDestIdx(arrays.prevDestIdx), _srcIdx(arrays.srcIdx),
-      _readySrcIdx(arrays.readySrcIdx), macroop(_macroop)
+      _readySrcIdx(arrays.readySrcIdx), _waitingSrcIdx(arrays.waitingSrcIdx),
+      macroop(_macroop)
 {
     std::fill(_readySrcIdx, _readySrcIdx + (numSrcs() + 7) / 8, 0);
+    std::fill(_waitingSrcIdx, _waitingSrcIdx + (numSrcs() + 7) / 8, 0);
 
     status.reset();
 
@@ -164,8 +166,13 @@ DynInst::operator new(size_t count, Arrays &arrays)
     size_t ready_src_idx_size =
         sizeof(*arrays.readySrcIdx) * ((num_srcs + 7) / 8);
 
+    uintptr_t waiting_src_idx =
+        roundUp(ready_src_idx + ready_src_idx_size, alignof(uint8_t));
+    size_t waiting_src_idx_size =
+        sizeof(*arrays.waitingSrcIdx) * ((num_srcs + 7) / 8);
+
     // Figure out how much space we need in total.
-    size_t total_size = ready_src_idx + ready_src_idx_size;
+    size_t total_size = waiting_src_idx + waiting_src_idx_size;
 
     // Actually allocate it.
     uint8_t *buf = (uint8_t *)::operator new(total_size);
@@ -176,6 +183,7 @@ DynInst::operator new(size_t count, Arrays &arrays)
     arrays.prevDestIdx = (PhysRegIdPtr *)(buf + prev_dest_idx);
     arrays.srcIdx = (PhysRegIdPtr *)(buf + src_idx);
     arrays.readySrcIdx = (uint8_t *)(buf + ready_src_idx);
+    arrays.waitingSrcIdx = (uint8_t *)(buf + waiting_src_idx);
 
     // Initialize all the extra components.
     new (arrays.flatDestIdx) RegId[num_dests];
@@ -183,6 +191,7 @@ DynInst::operator new(size_t count, Arrays &arrays)
     new (arrays.prevDestIdx) PhysRegIdPtr[num_dests];
     new (arrays.srcIdx) PhysRegIdPtr[num_srcs];
     new (arrays.readySrcIdx) uint8_t[num_srcs];
+    new (arrays.waitingSrcIdx) uint8_t[num_srcs];
 
     return buf;
 }
@@ -216,6 +225,9 @@ DynInst::~DynInst()
 
     for (int i = 0; i < ((_numSrcs + 7) / 8); i++)
         _readySrcIdx[i].~uint8_t();
+
+    for (int i = 0; i < ((_numSrcs + 7) / 8); i++)
+        _waitingSrcIdx[i].~uint8_t();
 
 #if TRACING_ON
     if (debug::O3PipeView) {
@@ -301,21 +313,53 @@ DynInst::dump(std::string &outstring)
     outstring = s.str();
 }
 
-void
-DynInst::markSrcRegReady()
+
+size_t DynInst::countReadySrcs()
 {
-    DPRINTF(IQ, "[sn:%lli] has %d ready out of %d sources. RTI %d)\n",
-            seqNum, readyRegs+1, numSrcRegs(), readyToIssue());
-    if (++readyRegs == numSrcRegs()) {
-        setCanIssue();
+    // count number of ones in each 8 bit section
+    // of _readySrcIdx and add them up for total count
+    size_t count = 0;
+    for (int i = 0; i < (numSrcs() + 7) / 8; i++) {
+        count += __builtin_popcount(_readySrcIdx[i]);
     }
+    return count;
+}
+
+size_t DynInst::countWaitingSrcs()
+{
+    // count number of ones in each 8 bit section
+    // of _waitingSrcIdx and add them up for total count
+    size_t count = 0;
+    for (int i = 0; i < (numSrcs() + 7) / 8; i++) {
+        count += __builtin_popcount(_waitingSrcIdx[i]);
+    }
+    return count;
 }
 
 void
 DynInst::markSrcRegReady(RegIndex src_idx)
 {
+    waitingSrcIdx(src_idx, false);
     readySrcIdx(src_idx, true);
-    markSrcRegReady();
+    if (countReadySrcs() + countWaitingSrcs() == numSrcRegs()) {
+        setCanIssue();
+        if (countWaitingSrcs() > 1) {
+            setPretendReady();
+        }
+    }
+}
+
+void
+DynInst::markSrcRegWaiting(RegIndex src_idx)
+{
+    waitingSrcIdx(src_idx, true);
+    readySrcIdx(src_idx, false);
+    if (countReadySrcs() + countWaitingSrcs() == numSrcRegs()) {
+        setCanIssue();
+        if (countWaitingSrcs() > 1) {
+            setPretendReady();
+        }
+    }
 }
 
 

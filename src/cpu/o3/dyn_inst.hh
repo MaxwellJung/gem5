@@ -92,6 +92,7 @@ class DynInst : public ExecContext, public RefCounted
         PhysRegIdPtr *prevDestIdx;
         PhysRegIdPtr *srcIdx;
         uint8_t *readySrcIdx;
+        uint8_t *waitingSrcIdx;
     };
 
     static void *operator new(size_t count, Arrays &arrays);
@@ -149,6 +150,8 @@ class DynInst : public ExecContext, public RefCounted
         Completed,               /// Instruction has completed
         ResultReady,             /// Instruction has its result
         CanIssue,                /// Instruction can issue and execute
+        PretendReady,            /// All operands are either ready or waiting
+                                 /// PretendReady being true implies CanIssue is true
         Issued,                  /// Instruction has issued
         Executed,                /// Instruction has executed
         CanCommit,               /// Instruction can commit
@@ -238,6 +241,9 @@ class DynInst : public ExecContext, public RefCounted
     // Whether or not the source register is ready, one bit per register.
     uint8_t *_readySrcIdx;
 
+    // Whether or not the source register is waiting on load
+    uint8_t *_waitingSrcIdx;
+
   public:
     size_t numSrcs() const { return _numSrcs; }
     size_t numDests() const { return _numDests; }
@@ -315,6 +321,20 @@ class DynInst : public ExecContext, public RefCounted
         replaceBits(byte, idx % 8, ready ? 1 : 0);
     }
 
+    bool
+    waitingSrcIdx(int idx) const
+    {
+        uint8_t &byte = _waitingSrcIdx[idx / 8];
+        return bits(byte, idx % 8);
+    }
+
+    void
+    waitingSrcIdx(int idx, bool wait)
+    {
+        uint8_t &byte = _waitingSrcIdx[idx / 8];
+        replaceBits(byte, idx % 8, wait ? 1 : 0);
+    }
+
     /** The thread this instruction is from. */
     ThreadID threadNumber = 0;
 
@@ -327,9 +347,6 @@ class DynInst : public ExecContext, public RefCounted
 
     /** The Macroop if one exists */
     const StaticInstPtr macroop;
-
-    /** How many source registers are ready. */
-    uint8_t readyRegs = 0;
 
   public:
     /////////////////////// Load Store Data //////////////////////
@@ -721,13 +738,18 @@ class DynInst : public ExecContext, public RefCounted
             instResult.emplace(reg_class, std::forward<T>(t));
         }
     }
-    /** @} */
 
-    /** Records that one of the source registers is ready. */
-    void markSrcRegReady();
+    /** Count number of ready operands. */
+    size_t countReadySrcs();
+
+    /** Count number of waiting operands. */
+    size_t countWaitingSrcs();
 
     /** Marks a specific register as ready. */
     void markSrcRegReady(RegIndex src_idx);
+
+    /** Marks a specific register as waiting. */
+    void markSrcRegWaiting(RegIndex src_idx);
 
     /** Sets this instruction as completed. */
     void setCompleted() { status.set(Completed); }
@@ -749,6 +771,15 @@ class DynInst : public ExecContext, public RefCounted
 
     /** Clears this instruction being able to issue. */
     void clearCanIssue() { status.reset(CanIssue); }
+
+    /** Sets this instruction as pretend ready. */
+    void setPretendReady() { status.set(PretendReady); }
+
+    /** Returns whether or not this instruction is pretend ready. */
+    bool pretendReadyToIssue() const { return status[PretendReady]; }
+
+    /** Clears this instruction being pretend ready. */
+    void clearPretendReady() { status.reset(PretendReady); }
 
     /** Sets this instruction as issued from the IQ. */
     void setIssued() { status.set(Issued); }

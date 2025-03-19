@@ -1055,7 +1055,13 @@ InstructionQueue::wakeDependents(const DynInstPtr &completed_inst)
             // so that it knows which of its source registers is
             // ready.  However that would mean that the dependency
             // graph entries would need to hold the src_reg_idx.
-            dep_inst->markSrcRegReady();
+
+            // Manually find which source operand was dependent and mark it as ready
+            for (int src_idx = 0; src_idx < dep_inst->numSrcRegs(); ++src_idx) {
+                if (dep_inst->srcRegIdx(src_idx) == dest_reg->flatIndex()) {
+                    dep_inst->markSrcRegReady(src_idx);
+                }
+            }
 
             addIfReady(dep_inst);
 
