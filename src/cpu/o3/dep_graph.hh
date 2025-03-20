@@ -119,6 +119,9 @@ class DependencyGraph
      */
     void dump();
 
+    // Get head node of dependency graph for given register
+    DepEntry* getHead(RegIndex idx);
+
   private:
     /** Array of linked lists.  Each linked list is a list of all the
      *  instructions that depend upon a given register.  The actual
@@ -296,6 +299,13 @@ DependencyGraph<DynInstPtr>::dump()
         cprintf("\n");
     }
     cprintf("memAllocCounter: %i\n", memAllocCounter);
+}
+
+template <class DynInstPtr>
+DependencyEntry<DynInstPtr>*
+DependencyGraph<DynInstPtr>::getHead(RegIndex idx)
+{
+    return dependGraph[idx].next;
 }
 
 } // namespace o3

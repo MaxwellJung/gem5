@@ -337,16 +337,22 @@ size_t DynInst::countWaitingSrcs()
 }
 
 void
+DynInst::updateReadiness()
+{
+    if (countReadySrcs() + countWaitingSrcs() == numSrcRegs()) {
+        setCanIssue();
+        if (countWaitingSrcs() >= 1) {
+            setPretendReady();
+        }
+    }
+}
+
+void
 DynInst::markSrcRegReady(RegIndex src_idx)
 {
     waitingSrcIdx(src_idx, false);
     readySrcIdx(src_idx, true);
-    if (countReadySrcs() + countWaitingSrcs() == numSrcRegs()) {
-        setCanIssue();
-        if (countWaitingSrcs() > 1) {
-            setPretendReady();
-        }
-    }
+    updateReadiness();
 }
 
 void
@@ -354,12 +360,7 @@ DynInst::markSrcRegWaiting(RegIndex src_idx)
 {
     waitingSrcIdx(src_idx, true);
     readySrcIdx(src_idx, false);
-    if (countReadySrcs() + countWaitingSrcs() == numSrcRegs()) {
-        setCanIssue();
-        if (countWaitingSrcs() > 1) {
-            setPretendReady();
-        }
-    }
+    updateReadiness();
 }
 
 

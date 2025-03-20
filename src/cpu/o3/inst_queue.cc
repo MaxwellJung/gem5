@@ -426,6 +426,7 @@ InstructionQueue::resetState()
     deferredMemInsts.clear();
     blockedMemInsts.clear();
     retryMemInsts.clear();
+    waitingInstBuffer.clear();
     wbOutstanding = 0;
 }
 
@@ -1057,8 +1058,10 @@ InstructionQueue::wakeDependents(const DynInstPtr &completed_inst)
             // graph entries would need to hold the src_reg_idx.
 
             // Manually find which source operand was dependent and mark it as ready
+            PhysRegIdPtr src_reg;
             for (int src_idx = 0; src_idx < dep_inst->numSrcRegs(); ++src_idx) {
-                if (dep_inst->srcRegIdx(src_idx) == dest_reg->flatIndex()) {
+                src_reg = dep_inst->renamedSrcIdx(src_idx);
+                if (src_reg->flatIndex() == dest_reg->flatIndex()) {
                     dep_inst->markSrcRegReady(src_idx);
                 }
             }
@@ -1435,7 +1438,8 @@ InstructionQueue::addIfReady(const DynInstPtr &inst)
 {
     // If the instruction now has all of its source registers
     // available, then add it to the list of ready instructions.
-    if (inst->readyToIssue()) {
+    // Make sure all operands are fully ready and NOT pretend ready
+    if (inst->readyToIssue() && !inst->pretendReadyToIssue()) {
 
         //Add the instruction to the proper ready list.
         if (inst->isMemRef()) {
@@ -1598,6 +1602,35 @@ InstructionQueue::dumpInsts()
 
         inst_list_it++;
         ++num;
+    }
+}
+
+void
+InstructionQueue::markDepWaitInst(const DynInstPtr &long_latency_inst) {
+    // mark dependent operands/instructions as waiting
+    PhysRegIdPtr dest_reg;
+    PhysRegIdPtr src_reg;
+    DependencyGraph<DynInstPtr>::DepEntry* head_node;
+    DynInstPtr dep_inst;
+    for (int dest_reg_idx = 0; dest_reg_idx < long_latency_inst->numDestRegs(); dest_reg_idx++) {
+        dest_reg = long_latency_inst->renamedDestIdx(dest_reg_idx);
+
+        //Iterate through the dependency chain, marking the dependent registers as waiting
+        head_node = dependGraph.getHead(dest_reg->flatIndex());
+        while (head_node) {
+            dep_inst = head_node->inst;
+            // Manually find which source operand was dependent and mark it as waiting
+            for (int src_idx = 0; src_idx < dep_inst->numSrcRegs(); ++src_idx) {
+                src_reg = dep_inst->renamedSrcIdx(src_idx);
+                if (src_reg->flatIndex() == dest_reg->flatIndex()) {
+                    dep_inst->markSrcRegWaiting(src_idx);
+                }
+            }
+
+            addIfReady(dep_inst);
+
+            head_node = head_node->next;
+        }
     }
 }
 

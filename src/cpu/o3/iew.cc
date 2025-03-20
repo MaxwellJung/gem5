@@ -1171,6 +1171,9 @@ IEW::executeInsts()
                     continue;
                 }
             } else if (inst->isLoad()) {
+                // Update all operands depending on this load as waiting
+                instQueue.markDepWaitInst(inst);
+
                 // Loads will mark themselves as executed, and their writeback
                 // event adds the instruction to the queue to commit
                 fault = ldstQueue.executeLoad(inst);

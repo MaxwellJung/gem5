@@ -277,6 +277,9 @@ class InstructionQueue
     /** Debug function to print all instructions. */
     void printInsts();
 
+    // Mark operands waiting on long latency instruction as waiting
+    void markDepWaitInst(const DynInstPtr &long_latency_inst);
+
   private:
     /** Does the actual squashing. */
     void doSquash(ThreadID tid);
@@ -335,6 +338,11 @@ class InstructionQueue
      * since, so they can now be retried. May fail again go on the blocked list.
      */
     std::list<DynInstPtr> retryMemInsts;
+
+    /** Waiting Instruction Buffer (WIB):
+     *  List of instructions that are directly/indirectly waiting on load miss 
+    */
+    std::list<DynInstPtr> waitingInstBuffer;
 
     /**
      * Struct for comparing entries to be added to the priority queue.
