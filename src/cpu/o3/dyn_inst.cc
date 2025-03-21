@@ -337,22 +337,20 @@ size_t DynInst::countWaitingSrcs()
 }
 
 void
-DynInst::updateReadiness()
-{
-    if (countReadySrcs() + countWaitingSrcs() == numSrcRegs()) {
-        setCanIssue();
-        if (countWaitingSrcs() >= 1) {
-            setPretendReady();
-        }
-    }
-}
-
-void
 DynInst::markSrcRegReady(RegIndex src_idx)
 {
     waitingSrcIdx(src_idx, false);
     readySrcIdx(src_idx, true);
-    updateReadiness();
+
+    size_t num_operands = numSrcRegs();
+    size_t num_ready_operands = countReadySrcs();
+
+    DPRINTF(IQ, "[sn:%lli] has %d ready out of %d sources. RTI %d)\n",
+            seqNum, num_ready_operands, num_operands, readyToIssue());
+
+    if (num_ready_operands == num_operands) {
+        setCanIssue();
+    }
 }
 
 void
@@ -360,7 +358,18 @@ DynInst::markSrcRegWaiting(RegIndex src_idx)
 {
     waitingSrcIdx(src_idx, true);
     readySrcIdx(src_idx, false);
-    updateReadiness();
+
+    size_t num_operands = numSrcRegs();
+    size_t num_ready_operands = countReadySrcs();
+    size_t num_waiting_operands = countWaitingSrcs();
+
+    DPRINTF(IQ, "[sn:%lli] has %d wait out of %d sources. PRTI %d)\n",
+            seqNum, num_waiting_operands, num_operands, pretendReadyToIssue());
+
+    if ((num_waiting_operands >= 1) &&
+        (num_ready_operands + num_waiting_operands == num_operands)) {
+        setPretendReady();
+    }
 }
 
 

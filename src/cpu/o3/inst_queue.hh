@@ -277,8 +277,8 @@ class InstructionQueue
     /** Debug function to print all instructions. */
     void printInsts();
 
-    // Mark operands waiting on long latency instruction as waiting
-    void markDepWaitInst(const DynInstPtr &long_latency_inst);
+    // Mark all instructions depending on long latency instruction as waiting
+    void markDepInstAsWait(const DynInstPtr &long_latency_inst);
 
   private:
     /** Does the actual squashing. */

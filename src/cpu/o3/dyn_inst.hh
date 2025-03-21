@@ -745,9 +745,6 @@ class DynInst : public ExecContext, public RefCounted
     /** Count number of waiting operands. */
     size_t countWaitingSrcs();
 
-    /** update CanIssue and PretendReady flag */
-    void updateReadiness();
-
     /** Marks a specific register as ready. */
     void markSrcRegReady(RegIndex src_idx);
 
