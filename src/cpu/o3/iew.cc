@@ -1417,6 +1417,13 @@ IEW::tick()
 
         DPRINTF(IEW,"Issue: Processing [tid:%i]\n",tid);
 
+        /** Frees up space in IQ by moving pretend ready instructions out/into WIB
+         *  todo: Is it better to call outside this if block?
+         *  Maybe call it at the end of IEW::tick()?
+        */
+        instQueue.moveReadyInstsFromWIBToIQ(tid);
+        instQueue.movePretendReadyInstsFromIQToWIB(tid);
+
         checkSignalsAndUpdate(tid);
         dispatch(tid);
     }

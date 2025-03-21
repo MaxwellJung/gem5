@@ -145,6 +145,7 @@ class DynInst : public ExecContext, public RefCounted
     enum Status
     {
         IqEntry,                 /// Instruction is in the IQ
+        WibEntry,                /// Instruction is in the WIB
         RobEntry,                /// Instruction is in the ROB
         LsqEntry,                /// Instruction is in the LSQ
         Completed,               /// Instruction has completed
@@ -745,6 +746,9 @@ class DynInst : public ExecContext, public RefCounted
     /** Count number of waiting operands. */
     size_t countWaitingSrcs();
 
+    /** update CanIssue and PretendReady flag */
+    void updateReadiness();
+
     /** Marks a specific register as ready. */
     void markSrcRegReady(RegIndex src_idx);
 
@@ -826,7 +830,7 @@ class DynInst : public ExecContext, public RefCounted
     /** Sets this instruction as a entry the IQ. */
     void setInIQ() { status.set(IqEntry); }
 
-    /** Sets this instruction as a entry the IQ. */
+    /** Clears this instruction from a entry the IQ. */
     void clearInIQ() { status.reset(IqEntry); }
 
     /** Returns whether or not this instruction has issued. */
@@ -838,6 +842,14 @@ class DynInst : public ExecContext, public RefCounted
     /** Returns whether or not this instruction is squashed in the IQ. */
     bool isSquashedInIQ() const { return status[SquashedInIQ]; }
 
+    /** Sets this instruction as a entry the WIB. */
+    void setInWIB() { status.set(WibEntry); }
+
+    /** Clears this instruction from a entry the WIB. */
+    void clearInWIB() { status.reset(WibEntry); }
+
+    /** Returns whether or not this instruction is in WIB. */
+    bool isInWIB() const { return status[WibEntry]; }
 
     //Load / Store Queue Functions
     //-----------------------

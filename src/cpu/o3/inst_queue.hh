@@ -280,6 +280,24 @@ class InstructionQueue
     // Mark all instructions depending on long latency instruction as waiting
     void markDepInstAsWait(const DynInstPtr &long_latency_inst);
 
+    // Internally move instruction from IQ to WIB
+    void moveFromIqToWib(const DynInstPtr &iq_inst);
+
+    // Internally move instruction from WIB to IQ
+    void moveFromWibToIq(const DynInstPtr &wib_inst);
+
+    /**
+     * Move pretend ready instructions to WIB
+     * until WIB runs out of space
+     */
+    void movePretendReadyInstsFromIQToWIB(ThreadID tid);
+
+    /**
+     * Move ready instructions to WIB
+     * until WIB runs out of space
+     */
+    void moveReadyInstsFromWIBToIQ(ThreadID tid);
+
   private:
     /** Does the actual squashing. */
     void doSquash(ThreadID tid);
@@ -425,17 +443,29 @@ class InstructionQueue
     /** Pointer to list of active threads. */
     std::list<ThreadID> *activeThreads;
 
-    /** Per Thread IQ count */
+    /** Per Thread IQ+WIB count */
     unsigned count[MaxThreads];
 
-    /** Max IQ Entries Per Thread */
+    /** Per Thread WIB count */
+    unsigned countWIB[MaxThreads];
+
+    /** Max IQ+WIB Entries Per Thread */
     unsigned maxEntries[MaxThreads];
 
-    /** Number of free IQ entries left. */
-    unsigned freeEntries;
+    /** Max WIB Entries Per Thread */
+    unsigned maxWIBEntries[MaxThreads];
 
-    /** The number of entries in the instruction queue. */
+    /** Number of free IQ entries left. */
+    unsigned freeIQEntries;
+
+    /** The number of entries in IQ+WIB. */
     unsigned numEntries;
+
+    /** Number of free WIB entries left. */
+    unsigned freeWIBEntries;
+
+    /** The number of entries in the Waiting Instruction Buffer (WIB). */
+    unsigned numWIBEntries;
 
     /** The total number of instructions that can be issued in one cycle. */
     unsigned totalWidth;

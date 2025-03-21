@@ -91,7 +91,8 @@ InstructionQueue::InstructionQueue(CPU *cpu_ptr, IEW *iew_ptr,
       fuPool(params.fuPool),
       iqPolicy(params.smtIQPolicy),
       numThreads(params.numThreads),
-      numEntries(params.numIQEntries),
+      numEntries(params.numIQEntries + params.numWIBEntries),
+      numWIBEntries(params.numWIBEntries),
       totalWidth(params.issueWidth),
       commitToIEWDelay(params.commitToIEWDelay),
       iqStats(cpu, totalWidth),
@@ -131,15 +132,18 @@ InstructionQueue::InstructionQueue(CPU *cpu_ptr, IEW *iew_ptr,
         //Set Max Entries to Total ROB Capacity
         for (ThreadID tid = 0; tid < numThreads; tid++) {
             maxEntries[tid] = numEntries;
+            maxWIBEntries[tid] = numWIBEntries;
         }
 
     } else if (iqPolicy == SMTQueuePolicy::Partitioned) {
         //@todo:make work if part_amt doesnt divide evenly.
         int part_amt = numEntries / numThreads;
+        int part_WIB_amt = numWIBEntries / numThreads;
 
         //Divide ROB up evenly
         for (ThreadID tid = 0; tid < numThreads; tid++) {
             maxEntries[tid] = part_amt;
+            maxWIBEntries[tid] = part_WIB_amt;
         }
 
         DPRINTF(IQ, "IQ sharing policy set to Partitioned:"
@@ -148,10 +152,12 @@ InstructionQueue::InstructionQueue(CPU *cpu_ptr, IEW *iew_ptr,
         double threshold =  (double)params.smtIQThreshold / 100;
 
         int thresholdIQ = (int)((double)threshold * numEntries);
+        int thresholdWIB = (int)((double)threshold * numWIBEntries);
 
         //Divide up by threshold amount
         for (ThreadID tid = 0; tid < numThreads; tid++) {
             maxEntries[tid] = thresholdIQ;
+            maxWIBEntries[tid] = thresholdWIB;
         }
 
         DPRINTF(IQ, "IQ sharing policy set to Threshold:"
@@ -159,6 +165,7 @@ InstructionQueue::InstructionQueue(CPU *cpu_ptr, IEW *iew_ptr,
    }
     for (ThreadID tid = numThreads; tid < MaxThreads; tid++) {
         maxEntries[tid] = 0;
+        maxWIBEntries[tid] = 0;
     }
 }
 
@@ -396,11 +403,14 @@ InstructionQueue::resetState()
     //Initialize thread IQ counts
     for (ThreadID tid = 0; tid < MaxThreads; tid++) {
         count[tid] = 0;
+        countWIB[tid] = 0;
         instList[tid].clear();
     }
 
     // Initialize the number of free IQ entries.
-    freeEntries = numEntries;
+    freeIQEntries = numEntries - numWIBEntries;
+    // Initialize the number of free WIB entries.
+    freeWIBEntries = numWIBEntries;
 
     // Note that in actuality, the registers corresponding to the logical
     // registers start off as ready.  However this doesn't matter for the
@@ -502,9 +512,11 @@ InstructionQueue::resetEntries()
 
             if (iqPolicy == SMTQueuePolicy::Partitioned) {
                 maxEntries[tid] = numEntries / active_threads;
+                maxWIBEntries[tid] = numWIBEntries / active_threads;
             } else if (iqPolicy == SMTQueuePolicy::Threshold &&
                        active_threads == 1) {
                 maxEntries[tid] = numEntries;
+                maxWIBEntries[tid] = numWIBEntries;
             }
         }
     }
@@ -513,13 +525,13 @@ InstructionQueue::resetEntries()
 unsigned
 InstructionQueue::numFreeEntries()
 {
-    return freeEntries;
+    return freeIQEntries;
 }
 
 unsigned
 InstructionQueue::numFreeEntries(ThreadID tid)
 {
-    return maxEntries[tid] - count[tid];
+    return (maxEntries[tid] - maxWIBEntries[tid]) - (count[tid] - countWIB[tid]);
 }
 
 // Might want to do something more complex if it knows how many instructions
@@ -527,7 +539,7 @@ InstructionQueue::numFreeEntries(ThreadID tid)
 bool
 InstructionQueue::isFull()
 {
-    if (freeEntries == 0) {
+    if (numFreeEntries() == 0) {
         return(true);
     } else {
         return(false);
@@ -576,11 +588,11 @@ InstructionQueue::insert(const DynInstPtr &new_inst)
     DPRINTF(IQ, "Adding instruction [sn:%llu] PC %s to the IQ.\n",
             new_inst->seqNum, new_inst->pcState());
 
-    assert(freeEntries != 0);
+    assert(freeIQEntries != 0);
 
     instList[new_inst->threadNumber].push_back(new_inst);
 
-    --freeEntries;
+    --freeIQEntries;
 
     new_inst->setInIQ();
 
@@ -602,7 +614,7 @@ InstructionQueue::insert(const DynInstPtr &new_inst)
 
     count[new_inst->threadNumber]++;
 
-    assert(freeEntries == (numEntries - countInsts()));
+    assert((freeIQEntries + freeWIBEntries) == (numEntries - countInsts()));
 }
 
 void
@@ -626,11 +638,11 @@ InstructionQueue::insertNonSpec(const DynInstPtr &new_inst)
             "to the IQ.\n",
             new_inst->seqNum, new_inst->pcState());
 
-    assert(freeEntries != 0);
+    assert(freeIQEntries != 0);
 
     instList[new_inst->threadNumber].push_back(new_inst);
 
-    --freeEntries;
+    --freeIQEntries;
 
     new_inst->setInIQ();
 
@@ -648,7 +660,7 @@ InstructionQueue::insertNonSpec(const DynInstPtr &new_inst)
 
     count[new_inst->threadNumber]++;
 
-    assert(freeEntries == (numEntries - countInsts()));
+    assert((freeIQEntries + freeWIBEntries) == (numEntries - countInsts()));
 }
 
 void
@@ -900,7 +912,16 @@ InstructionQueue::scheduleReadyInsts()
             if (!issuing_inst->isMemRef()) {
                 // Memory instructions can not be freed from the IQ until they
                 // complete.
-                ++freeEntries;
+                if (issuing_inst->isInIQ()) {
+                    if (!issuing_inst->isInWIB()) {
+                        assert(freeIQEntries < numEntries - numWIBEntries);
+                        ++freeIQEntries;
+                    } else {
+                        assert(freeWIBEntries < numWIBEntries);
+                        ++freeWIBEntries;
+                        countWIB[tid]--;
+                    }
+                }
                 count[tid]--;
                 issuing_inst->clearInIQ();
             } else {
@@ -972,7 +993,7 @@ InstructionQueue::commit(const InstSeqNum &inst, ThreadID tid)
         instList[tid].pop_front();
     }
 
-    assert(freeEntries == (numEntries - countInsts()));
+    assert((freeIQEntries + freeWIBEntries) == (numEntries - countInsts()));
 }
 
 int
@@ -1005,7 +1026,17 @@ InstructionQueue::wakeDependents(const DynInstPtr &completed_inst)
         DPRINTF(IQ, "Completing mem instruction PC: %s [sn:%llu]\n",
             completed_inst->pcState(), completed_inst->seqNum);
 
-        ++freeEntries;
+        if (completed_inst->isInIQ()) {
+            if (!completed_inst->isInWIB()) {
+                assert(freeIQEntries < numEntries - numWIBEntries);
+                ++freeIQEntries;
+            } else {
+                assert(freeWIBEntries < numWIBEntries);
+                ++freeWIBEntries;
+                countWIB[tid]--;
+            }
+        }
+
         completed_inst->memOpDone(true);
         count[tid]--;
     } else if (completed_inst->isReadBarrier() ||
@@ -1320,7 +1351,14 @@ InstructionQueue::doSquash(ThreadID tid)
             //Update Thread IQ Count
             count[squashed_inst->threadNumber]--;
 
-            ++freeEntries;
+            if (!squashed_inst->isInWIB()) {
+                assert(freeIQEntries < numEntries - numWIBEntries);
+                ++freeIQEntries;
+            } else {
+                assert(freeWIBEntries < numWIBEntries);
+                ++freeWIBEntries;
+                countWIB[squashed_inst->threadNumber]--;
+            }
         }
 
         // IQ clears out the heads of the dependency graph only when
@@ -1478,7 +1516,7 @@ InstructionQueue::addIfReady(const DynInstPtr &inst)
 int
 InstructionQueue::countInsts()
 {
-    return numEntries - freeEntries;
+    return numEntries - (freeIQEntries + freeWIBEntries);
 }
 
 void
@@ -1611,7 +1649,7 @@ void
 InstructionQueue::markDepInstAsWait(const DynInstPtr &long_latency_inst) {
     PhysRegIdPtr dest_reg;
     PhysRegIdPtr src_reg;
-    bool src_ready;
+    bool src_waiting;
     DependencyGraph<DynInstPtr>::DepEntry* head_node;
     DynInstPtr dep_inst;
     for (int dest_reg_idx = 0; dest_reg_idx < long_latency_inst->numDestRegs(); dest_reg_idx++) {
@@ -1624,14 +1662,131 @@ InstructionQueue::markDepInstAsWait(const DynInstPtr &long_latency_inst) {
             // Manually find which source operand was dependent and mark it as waiting
             for (int src_idx = 0; src_idx < dep_inst->numSrcRegs(); ++src_idx) {
                 src_reg = dep_inst->renamedSrcIdx(src_idx);
-                src_ready = dep_inst->readySrcIdx(src_idx);
-                if (src_reg->flatIndex() == dest_reg->flatIndex() && !src_ready) {
+                src_waiting = dep_inst->waitingSrcIdx(src_idx);
+                if (src_reg->flatIndex() == dest_reg->flatIndex() && !src_waiting) {
                     dep_inst->markSrcRegWaiting(src_idx);
                     break;
                 }
             }
 
             head_node = head_node->next;
+        }
+    }
+}
+
+void
+InstructionQueue::moveFromIqToWib(const DynInstPtr &iq_inst)
+{
+    // Make sure the instruction is valid
+    assert(iq_inst);
+    // Make sure instruction is in IQ and not already in WIB
+    assert(iq_inst->isInIQ() && !iq_inst->isInWIB());
+
+    DPRINTF(IQ, "Moving instruction [sn:%llu] PC %s from IQ (%d free) to WIB (%d free).\n",
+            iq_inst->seqNum, iq_inst->pcState(), freeIQEntries, freeWIBEntries);
+
+    // prevents negative freeWIBEntries
+    assert(freeWIBEntries > 0);
+    // prevents having more freeIQEntries than maximum IQ capacity
+    assert(freeIQEntries < numEntries - numWIBEntries);
+
+    --freeWIBEntries;
+    ++freeIQEntries;
+
+    iq_inst->setInWIB();
+
+    assert(countWIB[iq_inst->threadNumber] < numWIBEntries);
+    countWIB[iq_inst->threadNumber]++;
+
+    // Moving instructions to WIB triggers broadcasting wait status
+    markDepInstAsWait(iq_inst);
+
+    assert((freeIQEntries + freeWIBEntries) == (numEntries - countInsts()));
+}
+
+void
+InstructionQueue::moveFromWibToIq(const DynInstPtr &wib_inst)
+{
+    // Make sure the instruction is valid
+    assert(wib_inst);
+    // Make sure instruction is in WIB and not already in IQ
+    assert(wib_inst->isInIQ() && wib_inst->isInWIB());
+
+    DPRINTF(IQ, "Moving instruction [sn:%llu] PC %s from WIB (%d free) to IQ (%d free).\n",
+            wib_inst->seqNum, wib_inst->pcState(), freeWIBEntries, freeIQEntries);
+
+    // prevents negative freeIQEntries
+    assert(freeIQEntries > 0);
+    // prevents having more freeWIBEntries than maximum WIB capacity
+    assert(freeWIBEntries < numWIBEntries);
+
+    --freeIQEntries;
+    ++freeWIBEntries;
+
+    wib_inst->clearInWIB();
+
+    assert(countWIB[wib_inst->threadNumber] > 0);
+    countWIB[wib_inst->threadNumber]--;
+
+    assert((freeIQEntries + freeWIBEntries) == (numEntries - countInsts()));
+}
+
+
+/*
+void 
+InstructionQueue::moveToAndFromIQandQIB()
+{
+    // buffer logic here
+
+    // then this stuff
+    instQueue.scheduleReadyInsts();
+
+    instQueue.moveReadyInstsFromWIBToIQ();
+}
+
+Conditions:
+Move to WIB
+- !WibEntry() && PretendRead()
+
+Move back to IQ
+- WibEntry && CanIssue
+
+*/
+
+void
+InstructionQueue::movePretendReadyInstsFromIQToWIB(ThreadID tid)
+{
+    // use IEW::dispatchInsts(ThreadID tid) as reference
+
+    // iterate through all instructions in X
+    // if they're pretend ready and WIB has free space, call moveFromIqToWib
+    
+    // DynInstPtr inst;
+    for (const auto& inst : instList[tid]) {
+        // Exit if full
+        if (freeWIBEntries == 0) break;
+        // Move instruction from IQ to WIB if the flag is now PretendReady
+        if (inst->isInIQ() && !inst->isInWIB() && inst->pretendReadyToIssue()) {
+            // All safety checks are done in this helper
+            moveFromIqToWib(inst);
+        }
+    }
+}
+
+void
+InstructionQueue::moveReadyInstsFromWIBToIQ(ThreadID tid)
+{
+   
+    // iterate through all instructions in WIB
+    // if they're ready and X has free space, call moveFromWibToIq
+
+    for (const auto& inst : instList[tid]) {
+        // Exit if full
+        if (freeIQEntries == 0) break;
+        // Move instruction back from WIB to IQ if the flag is now CanIssue (i.e., dependences are loaded)
+        if (inst->isInIQ() && inst->isInWIB() && inst->readyToIssue()) {            
+            // All safety checks are done in this helper
+            moveFromWibToIq(inst);
         }
     }
 }
