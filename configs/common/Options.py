@@ -335,6 +335,14 @@ def addCommonOptions(parser, default_isa: Optional[ISA] = None):
                         (if not set, use the default prefetcher of
                         the selected cache)""",
     )
+
+    parser.add_argument("--l1d_repl", default="LRURP",
+                      choices=ObjectList.repl_list.get_names(),
+                      help = "replacement policy for l1")
+    parser.add_argument("--l2_repl", default="LRURP",
+                      choices=ObjectList.repl_list.get_names(),
+                      help = "replacement policy for l2")
+
     parser.add_argument("--checker", action="store_true")
     parser.add_argument(
         "--cpu-clock",

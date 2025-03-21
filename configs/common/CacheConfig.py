@@ -131,8 +131,15 @@ def config_cache(options, system):
         # Provide a clock for the L2 and the L1-to-L2 bus here as they
         # are not connected using addTwoLevelCacheHierarchy. Use the
         # same clock as the CPUs.
-        system.l2 = l2_cache_class(
-            clk_domain=system.cpu_clk_domain, **_get_cache_opts("l2", options)
+        
+        # system.l2 = l2_cache_class(
+        #     clk_domain=system.cpu_clk_domain, **_get_cache_opts("l2", options)
+        # )
+
+        system.l2 = l2_cache_class(clk_domain=system.cpu_clk_domain,
+            size=options.l2_size,
+            assoc=options.l2_assoc,
+            replacement_policy=ObjectList.repl_list.get(options.l2_repl)()
         )
 
         system.tol2bus = L2XBar(clk_domain=system.cpu_clk_domain)
@@ -144,8 +151,11 @@ def config_cache(options, system):
 
     for i in range(options.num_cpus):
         if options.caches:
-            icache = icache_class(**_get_cache_opts("l1i", options))
-            dcache = dcache_class(**_get_cache_opts("l1d", options))
+            icache = icache_class(**_get_cache_opts("l1i", options)) # assume LRU is the default 
+            # dcache = dcache_class(**_get_cache_opts("l1d", options))
+            dcache = dcache_class(size=options.l1d_size, assoc=options.l1d_assoc,
+                                  replacement_policy=ObjectList.repl_list.get(options.l1d_repl)())
+            print(dcache, dcache.size, dcache.assoc, ObjectList.repl_list.get(options.l1d_repl)())
 
             # If we are using ISA.X86 or ISA.RISCV, we set walker caches.
             if ObjectList.cpu_list.get_isa(options.cpu_type) in [
